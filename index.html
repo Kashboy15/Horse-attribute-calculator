@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Attribute Points Calculator</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a33;
+      --muted: #9fb0d0;
+      --text: #e6ecff;
+      --accent: #6ea8fe;
+      --line: #243055;
+      --good: #22c55e;
+      --ok: #f59e0b;
+      --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0b1020, #0e1430);
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    header { padding: 20px 16px 8px; text-align: center; }
+    header h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: 0.4px; }
+    header p { margin: 0; color: var(--muted); font-size: 13px; }
+    .wrap { max-width: 980px; margin: 16px auto 48px; padding: 0 12px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+    label { font-size: 13px; color: var(--muted); }
+    select, button {
+      background: #0b1020; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 10px; font: inherit;
+    }
+    select:focus, button:focus { outline: 2px solid var(--accent); }
+    button { cursor: pointer; border-color: #2d3c6b; }
+    .btn-accent { background: #0b193f; border-color: #3b4f8f; }
+    .grid { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    thead th { position: sticky; top: 0; background: #0f1835; z-index: 1; font-weight: 700; }
+    tbody tr:last-child td { border-bottom: none; }
+    .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .card { background: #0b1128; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .card h3 { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+    .big { font-size: 28px; font-weight: 700; letter-spacing: 0.5px; }
+    .verdict.good { color: var(--good); }
+    .verdict.ok { color: var(--ok); }
+    .verdict.bad { color: var(--bad); }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .foot { margin-top: 16px; text-align: right; color: var(--muted); font-size: 12px; }
+    @media (max-width: 720px) { .totals { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Attribute Points Calculator</h1>
+    <p>Now using the expanded grade scale (D → C → B → A → S → SS → SSS), with subgrades − / (plain) / +. One step difference = ±1 point.</p>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <div class="controls">
+        <div>
+          <label for="baseGrade">Base Foal Grade</label><br/>
+          <select id="baseGrade"></select>
+        </div>
+        <div>
+          <label>Quick Actions</label><br/>
+          <button id="resetAll">Reset All</button>
+          <button id="fillExample" class="btn-accent">Load A+ Example</button>
+          <button id="copyLink">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>Attribute</th>
+              <th>Father Grade</th>
+              <th>Father Points</th>
+              <th>Mother Grade</th>
+              <th>Mother Points</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="totals">
+        <div class="card">
+          <h3>Father Total</h3>
+          <div id="fatherTotal" class="big">0</div>
+        </div>
+        <div class="card">
+          <h3>Mother Total</h3>
+          <div id="motherTotal" class="big">0</div>
+        </div>
+        <div class="card">
+          <h3>Combined Total</h3>
+          <div id="combinedTotal" class="big">0</div>
+          <div id="verdict" class="verdict bad">Pass</div>
+          <div class="hint">12+ = Elite (ideal) • 10–11 = Good (acceptable)</div>
+        </div>
+      </div>
+
+      <div class="foot">
+        Ordering (best → worst): SSS, SSS−, SS+, SS, SS−, S+, S, S−, A+, A, A−, B+, B, B−, C+, C, C−, D+, D.
+        No SSS+ or D− to respect the extremes you specified.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const attributes = ["Start", "Speed", "Stamina", "Finish", "Heart", "Temper"];
+      // Best → Worst
+      const grades = ["SSS","SSS-","SS+","SS","SS-","S+","S","S-","A+","A","A-","B+","B","B-","C+","C","C-","D+","D"];
+
+      const tblBody = document.querySelector("#table tbody");
+      const baseSelect = document.getElementById("baseGrade");
+      const fatherTotalEl = document.getElementById("fatherTotal");
+      const motherTotalEl = document.getElementById("motherTotal");
+      const combinedTotalEl = document.getElementById("combinedTotal");
+      const verdictEl = document.getElementById("verdict");
+
+      // Build base grade select
+      grades.forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g; opt.textContent = g;
+        baseSelect.appendChild(opt);
+      });
+
+      // Build rows
+      attributes.forEach(attr => {
+        const tr = document.createElement("tr");
+
+        const tdAttr = document.createElement("td");
+        tdAttr.textContent = attr;
+        tr.appendChild(tdAttr);
+
+        const tdFG = document.createElement("td");
+        const fSel = document.createElement("select");
+        grades.forEach(g => { const o=document.createElement("option"); o.value=g; o.textContent=g; fSel.appendChild(o); });
+        tdFG.appendChild(fSel);
+        tr.appendChild(tdFG);
+
+        const tdFP = document.createElement("td");
+        tdFP.className = "num fatherPoints";
+        tdFP.textContent = "0";
+        tr.appendChild(tdFP);
+
+        const tdMG = document.createElement("td");
+        const mSel = document.createElement("select");
+        grades.forEach(g => { const o=document.createElement("option"); o.value=g; o.textContent=g; mSel.appendChild(o); });
+        tdMG.appendChild(mSel);
+        tr.appendChild(tdMG);
+
+        const tdMP = document.createElement("td");
+        tdMP.className = "num motherPoints";
+        tdMP.textContent = "0";
+        tr.appendChild(tdMP);
+
+        tblBody.appendChild(tr);
+      });
+
+      const gIndex = g => grades.indexOf(g);
+      const calcPts = (base, g) => gIndex(base) - gIndex(g); // + if better than base
+
+      function updateTotals(){
+        const base = baseSelect.value;
+        let fTot = 0, mTot = 0;
+
+        Array.from(tblBody.rows).forEach(row => {
+          const fSel = row.cells[1].querySelector("select");
+          const mSel = row.cells[3].querySelector("select");
+          const fPts = calcPts(base, fSel.value);
+          const mPts = calcPts(base, mSel.value);
+          row.cells[2].textContent = fPts;
+          row.cells[4].textContent = mPts;
+          fTot += fPts; mTot += mPts;
+        });
+
+        fatherTotalEl.textContent = fTot;
+        motherTotalEl.textContent = mTot;
+        const combined = fTot + mTot;
+        combinedTotalEl.textContent = combined;
+
+        verdictEl.classList.remove("good","ok","bad");
+        if (combined >= 12) { verdictEl.textContent = "Elite (ideal)"; verdictEl.classList.add("good"); }
+        else if (combined >= 10) { verdictEl.textContent = "Good (acceptable)"; verdictEl.classList.add("ok"); }
+        else { verdictEl.textContent = "Pass"; verdictEl.classList.add("bad"); }
+      }
+
+      // State <-> URL hash (bookmarkable)
+      function encodeState(){
+        const base = baseSelect.value;
+        const f = {}, m = {};
+        Array.from(tblBody.rows).forEach(row => {
+          const attr = row.cells[0].textContent;
+          f[attr] = row.cells[1].querySelector("select").value;
+          m[attr] = row.cells[3].querySelector("select").value;
+        });
+        return { base, father: f, mother: m };
+      }
+      function setFromState(s){
+        if (s.base && grades.includes(s.base)) baseSelect.value = s.base;
+        Array.from(tblBody.rows).forEach(row => {
+          const attr = row.cells[0].textContent;
+          const fSel = row.cells[1].querySelector("select");
+          const mSel = row.cells[3].querySelector("select");
+          if (s.father && s.father[attr]) fSel.value = s.father[attr];
+          if (s.mother && s.mother[attr]) mSel.value = s.mother[attr];
+        });
+        updateTotals();
+      }
+      function saveHash(){
+        const s = encodeState();
+        const json = JSON.stringify(s);
+        const b64 = btoa(unescape(encodeURIComponent(json)));
+        location.hash = b64;
+      }
+      function loadHash(){
+        if (!location.hash) return null;
+        try {
+          const b64 = location.hash.slice(1);
+          const json = decodeURIComponent(escape(atob(b64)));
+          return JSON.parse(json);
+        } catch(e) { console.warn("Bad hash:", e); return null; }
+      }
+
+      baseSelect.addEventListener("change", () => { updateTotals(); saveHash(); });
+      tblBody.addEventListener("change", (e) => {
+        if (e.target.tagName === "SELECT") { updateTotals(); saveHash(); }
+      });
+
+      document.getElementById("resetAll").addEventListener("click", () => {
+        baseSelect.value = "A";
+        Array.from(tblBody.querySelectorAll("select")).forEach(sel => sel.value = baseSelect.value);
+        updateTotals(); saveHash();
+      });
+
+      document.getElementById("fillExample").addEventListener("click", () => {
+        // Use the A+ example mapped into this expanded scale (A+ exists).
+        const example = {
+          base: "A+",
+          father: { "Start":"SSS", "Speed":"SS", "Stamina":"S+", "Finish":"A+", "Heart":"S+", "Temper":"SS" },
+          mother: { "Start":"A", "Speed":"A", "Stamina":"S+", "Finish":"S+", "Heart":"A-", "Temper":"A" }
+        };
+        setFromState(example);
+        saveHash();
+      });
+
+      document.getElementById("copyLink").addEventListener("click", async () => {
+        saveHash();
+        try { await navigator.clipboard.writeText(location.href); alert("Link copied to clipboard!"); }
+        catch (e) { prompt("Copy this link:", location.href); }
+      });
+
+      // Init defaults: base A, selections at base to yield zeroes
+      baseSelect.value = "A";
+      // Populate base select BEFORE setting values
+      if (!baseSelect.value) baseSelect.value = grades.includes("A") ? "A" : grades[Math.floor(grades.length/2)];
+      Array.from(tblBody.querySelectorAll("select")).forEach(sel => sel.value = baseSelect.value);
+      const hashed = loadHash();
+      if (hashed) setFromState(hashed);
+      updateTotals();
+    })();
+  </script>
+</body>
+</html>
